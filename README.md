@@ -11,7 +11,7 @@ cd 呢個資料夾
 python3 -m http.server 8765
 ```
 
-然後開 http://localhost:8765 ，允許鏡頭。第一次要上網下載 MediaPipe 模型，之後先至可以離線推理。
+然後開 http://localhost:8765 ，允許鏡頭。姿勢模型已經放咗喺 `models/pose_landmarker_lite.task`，唔使每次再下載。MediaPipe 程式同 WASM 仍然由 CDN 載入，瀏覽器會 cache。
 
 如果更新後畫面仲係舊版，請強制重新整理或清 cache。
 
