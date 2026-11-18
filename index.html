@@ -1,0 +1,872 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Pose Match — 五題挑戰</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+HK:wght@400;600;800&family=Outfit:wght@600;800&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #070b16;
+      --lime: #c8ff3d;
+      --cyan: #6ee7ff;
+      --gold: #ffd24a;
+      --warn: #ffb020;
+      --bad: #ff5a6a;
+      --muted: #9aa6c0;
+      --line: rgba(255,255,255,.14);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; background: var(--bg); color: #f4f7ff; font-family: "Noto Sans HK","PingFang HK","Microsoft JhengHei",sans-serif; overflow: hidden; }
+    #stage { position: relative; width: 100vw; height: 100vh; background: #050814; }
+    video { display: none; }
+    #cv, #fx { position: absolute; inset: 0; width: 100%; height: 100%; }
+    #cv { object-fit: contain; background: #050814; }
+    #fx { pointer-events: none; }
+    .hud { position: absolute; inset: 0; pointer-events: none; display: grid; grid-template-rows: auto auto 1fr auto; padding: 24px 32px 20px; z-index: 2; }
+    .top { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+    .brand h1 { font-family: Outfit,sans-serif; font-weight: 800; letter-spacing: .06em; font-size: clamp(26px, 3.2vw, 48px); line-height: 1; }
+    .brand p { margin-top: 4px; color: var(--muted); font-size: clamp(13px, 1.2vw, 18px); }
+    .totals { display: flex; gap: 18px; align-items: flex-start; }
+    .box { text-align: right; min-width: 110px; }
+    .box .label { color: var(--muted); font-size: 12px; letter-spacing: .14em; font-weight: 600; }
+    .box .num { font-family: Outfit,sans-serif; font-weight: 800; font-size: clamp(40px, 5.4vw, 84px); line-height: .9; color: var(--lime); text-shadow: 0 0 22px rgba(200,255,61,.28); }
+    .box .num.mid { color: var(--warn); text-shadow: 0 0 18px rgba(255,176,32,.2); }
+    .box .num.low { color: var(--bad); text-shadow: none; }
+    .box .num.gold { color: var(--gold); text-shadow: 0 0 22px rgba(255,210,74,.35); }
+    .dots { display: flex; gap: 8px; margin-top: 14px; }
+    .dot { width: 14px; height: 14px; border-radius: 50%; border: 2px solid rgba(255,255,255,.28); background: transparent; transition: transform .25s, background .25s, border-color .25s; }
+    .dot.on { background: var(--lime); border-color: var(--lime); box-shadow: 0 0 10px rgba(200,255,61,.8); }
+    .dot.now { border-color: var(--cyan); box-shadow: 0 0 12px rgba(110,231,255,.8); animation: pulse 1s ease-in-out infinite; }
+    .dot.miss { background: #ff5a6a; border-color: #ff5a6a; }
+    @keyframes pulse { 50% { transform: scale(1.25); } }
+    .center { align-self: center; justify-self: center; text-align: center; pointer-events: auto; max-width: 90vw; }
+    .countdown { font-family: Outfit,sans-serif; font-weight: 800; font-size: clamp(110px, 20vw, 240px); line-height: .85; text-shadow: 0 10px 50px rgba(0,0,0,.55); animation: pop .35s cubic-bezier(.2,1.4,.3,1); }
+    @keyframes pop { from { transform: scale(.4); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+    @keyframes rise { from { transform: translateY(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+    .badge { display: inline-block; margin-bottom: 10px; padding: 6px 14px; border: 1px solid var(--line); border-radius: 999px; background: rgba(10,16,32,.7); color: var(--cyan); font-weight: 600; letter-spacing: .1em; font-size: 14px; }
+    .title-lg { font-size: clamp(28px, 3.8vw, 58px); font-weight: 800; text-shadow: 0 6px 30px rgba(0,0,0,.55); animation: rise .45s ease both; }
+    .sub { margin-top: 8px; color: #d5dcef; font-size: clamp(16px, 1.7vw, 24px); }
+    .plus { font-family: Outfit,sans-serif; font-weight: 800; font-size: clamp(56px, 9vw, 120px); color: var(--lime); text-shadow: 0 0 30px rgba(200,255,61,.45); animation: plusfly .7s cubic-bezier(.2,1.2,.3,1) both; }
+    @keyframes plusfly { from { transform: translateY(40px) scale(.6); opacity: 0; } 60% { transform: translateY(-6px) scale(1.06); opacity: 1; } to { transform: none; opacity: 1; } }
+    .actions { margin-top: 22px; display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+    button { pointer-events: auto; cursor: pointer; border: 0; border-radius: 999px; padding: 14px 28px; font: 800 18px/1 "Noto Sans HK",sans-serif; background: var(--lime); color: #111; }
+    button.ghost { background: transparent; color: #fff; border: 1px solid rgba(255,255,255,.32); }
+    button:disabled { opacity: .45; cursor: default; }
+    button:active { transform: scale(.98); }
+    .bottom { display: flex; justify-content: space-between; align-items: flex-end; }
+    .meta { color: var(--muted); font-size: 14px; }
+    .timer { font-family: Outfit,sans-serif; font-weight: 800; font-size: clamp(28px, 3vw, 44px); }
+    .timer.urgent { color: var(--warn); animation: pulse .5s ease-in-out infinite; }
+    .toast { position: absolute; left: 50%; top: 20%; transform: translateX(-50%); background: rgba(10,16,32,.78); border: 1px solid var(--line); padding: 10px 18px; border-radius: 12px; color: var(--warn); font-weight: 600; z-index: 3; pointer-events: none; }
+    .pass { font-family: Outfit,sans-serif; font-weight: 800; font-size: clamp(48px, 7vw, 96px); color: var(--lime); text-shadow: 0 0 34px rgba(200,255,61,.5); animation: pop .35s cubic-bezier(.2,1.4,.3,1); }
+    /* Final overlay */
+    #final {
+      position: absolute; inset: 0; z-index: 5; display: none;
+      background: radial-gradient(ellipse at center, rgba(8,14,36,.72) 0%, rgba(4,8,18,.92) 70%);
+      align-items: center; justify-content: center; flex-direction: column;
+      text-align: center; padding: 32px 20px;
+    }
+    #final.show { display: flex; animation: fadein .4s ease; }
+    @keyframes fadein { from { opacity: 0; } to { opacity: 1; } }
+    #final h2 { font-family: Outfit,sans-serif; font-weight: 800; font-size: clamp(22px, 2.4vw, 36px); letter-spacing: .2em; color: var(--cyan); }
+    #final .grand { font-family: Outfit,sans-serif; font-weight: 800; font-size: clamp(84px, 16vw, 200px); line-height: .9; color: var(--gold); text-shadow: 0 0 40px rgba(255,210,74,.45); margin: 6px 0 4px; }
+    #final .rank { font-size: clamp(28px, 4vw, 56px); font-weight: 800; margin-bottom: 18px; animation: rise .5s ease .15s both; }
+    .bars { width: min(640px, 92vw); display: grid; gap: 10px; margin: 8px 0 22px; }
+    .bar-row { display: grid; grid-template-columns: 7.5em 1fr 3em; gap: 10px; align-items: center; text-align: left; }
+    .bar-row span { font-weight: 600; font-size: 15px; }
+    .bar-row .pts { text-align: right; font-family: Outfit,sans-serif; font-weight: 800; }
+    .track { height: 12px; border-radius: 99px; background: rgba(255,255,255,.1); overflow: hidden; }
+    .fill { height: 100%; width: 0; border-radius: 99px; background: linear-gradient(90deg, var(--cyan), var(--lime)); transition: width 700ms cubic-bezier(.2,.8,.2,1); }
+    .fill.fail { background: linear-gradient(90deg, #ff8a5a, #ff5a6a); }
+    .flash { position: absolute; inset: 0; pointer-events: none; z-index: 4; background: #fff; opacity: 0; }
+    .flash.go { animation: flash .35s ease; }
+    @keyframes flash { 0% { opacity: .35; } 100% { opacity: 0; } }
+    .lockbar { width: min(320px, 70vw); height: 8px; border-radius: 99px; background: rgba(255,255,255,.12); overflow: hidden; margin: 16px auto 0; }
+    .lockbar > i { display: block; height: 100%; width: 0; background: var(--lime); }
+  </style>
+</head>
+<body>
+  <div id="stage">
+    <video id="cam" playsinline autoplay muted></video>
+    <canvas id="cv"></canvas>
+    <canvas id="fx"></canvas>
+    <div class="flash" id="flash"></div>
+    <div class="hud">
+      <div class="top">
+        <div class="brand">
+          <h1>POSE MATCH</h1>
+          <p id="subtitle">五題挑戰 · 累積計分</p>
+        </div>
+        <div class="totals">
+          <div class="box">
+            <div class="label">本題</div>
+            <div id="liveNum" class="num low">—</div>
+          </div>
+          <div class="box">
+            <div class="label">總分</div>
+            <div id="totalNum" class="num gold">0</div>
+          </div>
+        </div>
+      </div>
+      <div class="dots" id="dots"></div>
+      <div class="center" id="center"></div>
+      <div class="bottom">
+        <div class="meta" id="meta">唔存片、唔錄音 · 今日最佳 <span id="bestLabel">—</span></div>
+        <div class="timer" id="timer"></div>
+      </div>
+    </div>
+    <div class="toast" id="toast" hidden></div>
+    <div id="final"></div>
+  </div>
+
+  <script type="module">
+    import { PoseLandmarker, FilesetResolver, DrawingUtils } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/+esm";
+
+    const video = document.getElementById("cam");
+    const canvas = document.getElementById("cv");
+    const ctx = canvas.getContext("2d");
+    const fx = document.getElementById("fx");
+    const fxc = fx.getContext("2d");
+    const liveEl = document.getElementById("liveNum");
+    const totalEl = document.getElementById("totalNum");
+    const centerEl = document.getElementById("center");
+    const timerEl = document.getElementById("timer");
+    const toastEl = document.getElementById("toast");
+    const dotsEl = document.getElementById("dots");
+    const finalEl = document.getElementById("final");
+    const flashEl = document.getElementById("flash");
+    const subEl = document.getElementById("subtitle");
+    const bestLabel = document.getElementById("bestLabel");
+
+    const PASS = 75, SCORE_SEC = 6, HOLD_SEC = 0.5, DETECT_SEC = 1, INTER_SEC = 1.4, CAPTURE_HOLD = 1.0;
+    const BEST_KEY = "poseMatchBest";
+    const HOT_LINE = 60;
+    const CAPTURE_IDS = [0,11,12,13,14,15,16,23,24,25,26,27,28];
+
+    const audio = { ctx: null };
+    function beep(freq, dur, type="square", gain=0.05, at=0) {
+      try {
+        if (!audio.ctx) audio.ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const c = audio.ctx, t = c.currentTime + at;
+        const o = c.createOscillator(), g = c.createGain();
+        o.type = type; o.frequency.setValueAtTime(freq, t);
+        g.gain.setValueAtTime(gain, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+        o.connect(g); g.connect(c.destination);
+        o.start(t); o.stop(t + dur + 0.02);
+      } catch {}
+    }
+    function sfxTick() { beep(880, .08, "square", .04); }
+    function sfxGo() { beep(523, .1, "square", .05); beep(784, .16, "square", .05, .09); }
+    function sfxPass() { beep(659, .1, "square", .05); beep(880, .12, "square", .05, .1); beep(1175, .2, "triangle", .06, .2); }
+    function sfxFanfare() {
+      [523,659,784,1046].forEach((f,i) => beep(f, .18, "triangle", .06, i*0.12));
+    }
+
+    function angleAt(a,b,c) {
+      const abx=a.x-b.x, aby=a.y-b.y, cbx=c.x-b.x, cby=c.y-b.y;
+      const den = Math.hypot(abx,aby)*Math.hypot(cbx,cby);
+      if (den < 1e-6) return null;
+      return Math.acos(Math.min(1, Math.max(-1, (abx*cbx+aby*cby)/den))) * 180 / Math.PI;
+    }
+    function horizDev(a,b) {
+      const deg = Math.abs(Math.atan2(b.y-a.y, b.x-a.x) * 180 / Math.PI);
+      return Math.min(deg, Math.abs(180-deg));
+    }
+    function vertDev(a,b) {
+      return Math.abs(Math.atan2(b.x-a.x, -(b.y-a.y)) * 180 / Math.PI);
+    }
+    function closeness(err, soft, hard) {
+      if (err <= soft) return 100;
+      if (err >= hard) return 0;
+      return 100 * (1 - (err-soft)/(hard-soft));
+    }
+    function visOK(pts) { return pts.every(p => p && (p.visibility === undefined || p.visibility >= 0.45)); }
+    function mid(a,b){ return {x:(a.x+b.x)/2, y:(a.y+b.y)/2}; }
+    function dist(a,b){ return Math.hypot(a.x-b.x, a.y-b.y); }
+    function p(lm,i){ return lm[i]; }
+    function uniq(xs){ return [...new Set(xs)]; }
+
+    function need(lm, ids, reason="請全身入鏡，面向鏡頭") {
+      if (!visOK(ids.map(i => lm[i]))) return { score:0, reason, hot:[] };
+      return null;
+    }
+    function avg(xs){ return Math.round(xs.reduce((a,b)=>a+b,0)/xs.length); }
+
+    function scoreTPose(lm) {
+      const miss = need(lm, [11,12,13,14,15,16,23,24]); if (miss) return miss;
+      const lSh=angleAt(p(lm,23),p(lm,11),p(lm,13)), rSh=angleAt(p(lm,24),p(lm,12),p(lm,14));
+      const lEl=angleAt(p(lm,11),p(lm,13),p(lm,15)), rEl=angleAt(p(lm,12),p(lm,14),p(lm,16));
+      if ([lSh,rSh,lEl,rEl].some(v=>v==null)) return {score:0, reason:"偵測唔穩，再企定啲", hot:[]};
+      const cLSh=closeness(Math.abs(lSh-90),15,50), cRSh=closeness(Math.abs(rSh-90),15,50);
+      const cLEl=closeness(Math.abs(lEl-180),15,55), cREl=closeness(Math.abs(rEl-180),15,55);
+      const cLU=closeness(horizDev(p(lm,11),p(lm,13)),12,45), cRU=closeness(horizDev(p(lm,12),p(lm,14)),12,45);
+      const cLL=closeness(horizDev(p(lm,13),p(lm,15)),15,50), cRL=closeness(horizDev(p(lm,14),p(lm,16)),15,50);
+      const hot = uniq([
+        ...(cLSh<HOT_LINE || cLU<HOT_LINE ? [11,13] : []),
+        ...(cRSh<HOT_LINE || cRU<HOT_LINE ? [12,14] : []),
+        ...(cLEl<HOT_LINE || cLL<HOT_LINE ? [13,15] : []),
+        ...(cREl<HOT_LINE || cRL<HOT_LINE ? [14,16] : []),
+      ]);
+      return {score: avg([cLSh,cRSh,cLEl,cREl,cLU,cRU,cLL,cRL]), reason:"", hot};
+    }
+    function scoreYPose(lm) {
+      const miss = need(lm, [11,12,13,14,15,16,23,24]); if (miss) return miss;
+      const lEl=angleAt(p(lm,11),p(lm,13),p(lm,15)), rEl=angleAt(p(lm,12),p(lm,14),p(lm,16));
+      if (lEl==null||rEl==null) return {score:0, reason:"偵測唔穩，再企定啲", hot:[]};
+      const upL = p(lm,15).y < p(lm,11).y, upR = p(lm,16).y < p(lm,12).y;
+      const vL=closeness(Math.abs(vertDev(p(lm,11),p(lm,15))-45),12,50);
+      const vR=closeness(Math.abs(vertDev(p(lm,12),p(lm,16))-45),12,50);
+      const cLEl=closeness(Math.abs(lEl-180),15,55), cREl=closeness(Math.abs(rEl-180),15,55);
+      const hot = uniq([
+        ...(!upL || vL<HOT_LINE || cLEl<HOT_LINE ? [13,15] : []),
+        ...(!upR || vR<HOT_LINE || cREl<HOT_LINE ? [14,16] : []),
+      ]);
+      return {score: avg([vL,vR,cLEl,cREl, upL?100:20, upR?100:20]), reason: upL&&upR ? "" : "雙手再斜向上舉", hot};
+    }
+    function scoreHips(lm) {
+      const miss = need(lm, [11,12,13,14,15,16,23,24]); if (miss) return miss;
+      const lEl=angleAt(p(lm,11),p(lm,13),p(lm,15)), rEl=angleAt(p(lm,12),p(lm,14),p(lm,16));
+      if (lEl==null||rEl==null) return {score:0, reason:"偵測唔穩，再企定啲", hot:[]};
+      const span = dist(p(lm,11),p(lm,12)) || 0.2;
+      const torso = dist(mid(p(lm,11),p(lm,12)), mid(p(lm,23),p(lm,24))) || 0.25;
+      // 叉腰時手通常喺腰側，高過髖關節；用「腰位」同髖一齊比距離，容錯放大
+      const lWaist = { x: p(lm,23).x, y: p(lm,23).y - torso*0.18 };
+      const rWaist = { x: p(lm,24).x, y: p(lm,24).y - torso*0.18 };
+      const nearL = Math.min(dist(p(lm,15), p(lm,23)), dist(p(lm,15), lWaist)) / span;
+      const nearR = Math.min(dist(p(lm,16), p(lm,24)), dist(p(lm,16), rWaist)) / span;
+      const elbowL = closeness(Math.abs(lEl-85), 35, 85);
+      const elbowR = closeness(Math.abs(rEl-85), 35, 85);
+      const yL = closeness(Math.abs(p(lm,15).y - lWaist.y) / torso * 100, 30, 90);
+      const yR = closeness(Math.abs(p(lm,16).y - rWaist.y) / torso * 100, 30, 90);
+      const dL = closeness(nearL * 100, 62, 145);
+      const dR = closeness(nearR * 100, 62, 145);
+      const score = avg([elbowL, elbowR, dL, dR, dL, dR, yL, yR]);
+      const reason = (nearL > 0.9 || nearR > 0.9) ? "手再貼近腰側，手肘打開少少" : "";
+      const hot = uniq([
+        ...(elbowL<HOT_LINE ? [13] : []),
+        ...(elbowR<HOT_LINE ? [14] : []),
+        ...(dL<HOT_LINE || yL<HOT_LINE ? [15] : []),
+        ...(dR<HOT_LINE || yR<HOT_LINE ? [16] : []),
+      ]);
+      return {score, reason, hot};
+    }
+    function scoreArmsUp(lm) {
+      const miss = need(lm, [0,11,12,13,14,15,16]); if (miss) return miss;
+      const lEl=angleAt(p(lm,11),p(lm,13),p(lm,15)), rEl=angleAt(p(lm,12),p(lm,14),p(lm,16));
+      if (lEl==null||rEl==null) return {score:0, reason:"偵測唔穩，再企定啲", hot:[]};
+      const aboveL = p(lm,15).y < p(lm,0).y, aboveR = p(lm,16).y < p(lm,0).y;
+      const vL=closeness(vertDev(p(lm,11),p(lm,15)),12,50);
+      const vR=closeness(vertDev(p(lm,12),p(lm,16)),12,50);
+      const cLEl=closeness(Math.abs(lEl-180),15,55), cREl=closeness(Math.abs(rEl-180),15,55);
+      const hot = uniq([
+        ...(!aboveL || vL<HOT_LINE || cLEl<HOT_LINE ? [13,15] : []),
+        ...(!aboveR || vR<HOT_LINE || cREl<HOT_LINE ? [14,16] : []),
+      ]);
+      return {score: avg([vL,vR,cLEl,cREl, (aboveL&&aboveR)?100:30]), reason: (aboveL&&aboveR) ? "" : "再舉高，越過頭頂", hot};
+    }
+    function scoreStar(lm) {
+      const miss = need(lm, [11,12,15,16,23,24,27,28], "請全身入鏡，連腳都要見到"); if (miss) return miss;
+      const y = scoreYPose(lm);
+      const hip = dist(p(lm,23),p(lm,24)) || 0.08;
+      const ankle = dist(p(lm,27),p(lm,28));
+      const legs = closeness(Math.abs((ankle/hip) - 3.2)*30, 20, 90);
+      const hot = uniq([...(y.hot||[]), ...(legs<HOT_LINE ? [25,26,27,28] : [])]);
+      return {score: avg([y.score, y.score, legs]), reason: ankle/hip < 2 ? "雙腳再開闊啲" : y.reason, hot};
+    }
+
+    function snapshotPose(lm) {
+      const out = {};
+      for (const i of CAPTURE_IDS) {
+        const q = lm[i];
+        if (!q) continue;
+        const vis = q.visibility === undefined || q.visibility >= 0.45;
+        if (!vis && ![11,12,23,24].includes(i)) continue;
+        out[i] = { x:q.x, y:q.y, vis };
+      }
+      return out;
+    }
+    function poseShift(a, b) {
+      if (!a || !b) return 999;
+      let m = 0, n = 0;
+      for (const i of [11,12,15,16,23,24,27,28]) {
+        if (a[i] && b[i]) { m = Math.max(m, dist(a[i], b[i])); n++; }
+      }
+      return n ? m : 999;
+    }
+    function scoreAgainst(lm, tmpl) {
+      const miss = need(lm, [11,12,23,24]); if (miss) return miss;
+      const g = alignedGhost(lm, tmpl);
+      const span = dist(p(lm,11), p(lm,12)) || 0.2;
+      const scores = [], hot = [];
+      for (const key of Object.keys(tmpl)) {
+        const i = Number(key);
+        if (![11,12,13,14,15,16,23,24,25,26,27,28].includes(i)) continue;
+        if (!g[i] || !visOK([lm[i]])) continue;
+        const s = closeness((dist(lm[i], g[i]) / span) * 100, 22, 80);
+        scores.push(s);
+        // 手腕、腳踝權重較高：再 push 一次
+        if ([15,16,27,28].includes(i)) scores.push(s);
+        if (s < HOT_LINE) hot.push(i);
+      }
+      if (!scores.length) return {score:0, reason:"偵測唔穩，再企定啲", hot:[]};
+      return {score: avg(scores), reason: hot.length ? "紅點再對準藍色骨架" : "", hot};
+    }
+
+    // Ghost templates in 0–1 space
+    function T(map){ return map; }
+    const baseLegs = {23:{x:.42,y:.55},24:{x:.58,y:.55},25:{x:.42,y:.75},26:{x:.58,y:.75},27:{x:.42,y:.95},28:{x:.58,y:.95},0:{x:.50,y:.16}};
+    const GHOSTS = {
+      tpose:  T({...baseLegs,11:{x:.36,y:.32},12:{x:.64,y:.32},13:{x:.18,y:.32},14:{x:.82,y:.32},15:{x:.02,y:.32},16:{x:.98,y:.32}}),
+      ypose:  T({...baseLegs,11:{x:.36,y:.32},12:{x:.64,y:.32},13:{x:.22,y:.18},14:{x:.78,y:.18},15:{x:.10,y:.04},16:{x:.90,y:.04}}),
+      hips:   T({...baseLegs,11:{x:.36,y:.32},12:{x:.64,y:.32},13:{x:.22,y:.44},14:{x:.78,y:.44},15:{x:.38,y:.55},16:{x:.62,y:.55}}),
+      armsup: T({...baseLegs,11:{x:.36,y:.32},12:{x:.64,y:.32},13:{x:.38,y:.16},14:{x:.62,y:.16},15:{x:.40,y:.02},16:{x:.60,y:.02}}),
+      star:   T({0:{x:.50,y:.16},11:{x:.36,y:.32},12:{x:.64,y:.32},13:{x:.22,y:.18},14:{x:.78,y:.18},15:{x:.10,y:.04},16:{x:.90,y:.04},23:{x:.40,y:.55},24:{x:.60,y:.55},25:{x:.28,y:.76},26:{x:.72,y:.76},27:{x:.18,y:.95},28:{x:.82,y:.95}}),
+    };
+    const EDGES = [[11,12],[11,13],[13,15],[12,14],[14,16],[11,23],[12,24],[23,24],[23,25],[25,27],[24,26],[26,28]];
+
+    const POSES = [
+      { id:"tpose",  name:"T-pose",   hint:"雙臂向兩側平伸，手肘拉直", score:scoreTPose },
+      { id:"ypose",  name:"舉手成 Y", hint:"雙臂斜向上張開，成 Y 字", score:scoreYPose },
+      { id:"hips",   name:"雙手叉腰", hint:"手肘打開，手腕靠近腰側", score:scoreHips },
+      { id:"armsup", name:"雙手舉高", hint:"雙臂向上伸直，越過頭頂", score:scoreArmsUp },
+      { id:"star",   name:"星形",     hint:"雙腳打開，雙手成 Y，全身撐開", score:scoreStar },
+    ];
+
+    let landmarker, drawing;
+    let state = "loading";
+    let landmarks = null;
+    let run = POSES;
+    let challengeTarget = null;
+    let idx = 0, liveScore = 0, poseBest = 0, total = 0, history = [];
+    let holdStart = 0, presentSince = 0, stateUntil = 0, lastVideoTime = -1, countdownVal = 3;
+    let particles = [];
+    let hotJoints = [];
+    let capturePrev = null, captureStableSince = 0, captureProgress = 0;
+
+    function now(){ return performance.now()/1000; }
+    function pose(){ return run[idx]; }
+    function isClassic(){ return run === POSES; }
+    function bodyPresent(lm){ return visOK([lm[11],lm[12],lm[23],lm[24]]); }
+    function todayBest(){ return Number(localStorage.getItem(BEST_KEY) || 0); }
+    function saveBest(v){ const b = Math.max(todayBest(), v); localStorage.setItem(BEST_KEY, String(b)); bestLabel.textContent = b || "—"; return b; }
+    function maxScore(){ return run.length * 100; }
+    function roundLabel(){ return isClassic() ? `第 ${idx+1} ／ ${run.length} 題` : "挑戰題"; }
+
+    function alignedGhost(lm, tmpl) {
+      const uHip = mid(lm[23], lm[24]), tHip = mid(tmpl[23], tmpl[24]);
+      const s = (dist(lm[11], lm[12]) || 0.2) / dist(tmpl[11], tmpl[12]);
+      const out = {};
+      for (const k of Object.keys(tmpl)) {
+        const q = tmpl[k];
+        out[k] = { x: uHip.x + (q.x - tHip.x)*s, y: uHip.y + (q.y - tHip.y)*s };
+      }
+      return out;
+    }
+
+    function setLive(v){
+      if (v==null || Number.isNaN(v)) { liveEl.textContent="—"; liveEl.className="num low"; return; }
+      liveEl.textContent = String(v);
+      liveEl.className = "num" + (v>=PASS ? "" : v>=50 ? " mid" : " low");
+    }
+    function setTotal(v){ totalEl.textContent = String(v); }
+    function showToast(msg){ toastEl.hidden = !msg; if (msg) toastEl.textContent = msg; }
+
+    function renderDots(){
+      dotsEl.innerHTML = run.map((_,i) => {
+        let cls = "dot";
+        if (i === idx && (state==="countdown"||state==="scoring"||state==="interlude")) cls += " now";
+        if (history[i] != null) cls += history[i] >= PASS ? " on" : " miss";
+        return `<div class="${cls}"></div>`;
+      }).join("");
+    }
+
+    function rankOf(sum){
+      const p = sum / Math.max(1, maxScore());
+      if (p >= 0.92) return "姿勢傳奇";
+      if (p >= 0.8) return "骨力全開";
+      if (p >= 0.65) return "形神兼備";
+      if (p >= 0.5) return "有模有樣";
+      return "熱身完成";
+    }
+
+    function burst(x, y, n=70, gold=false){
+      const colors = gold ? ["#ffd24a","#fff1a8","#c8ff3d","#6ee7ff","#fff"] : ["#c8ff3d","#6ee7ff","#ffffff","#ffd24a"];
+      for (let i=0;i<n;i++){
+        const a = Math.random()*Math.PI*2, sp = 2+Math.random()*9;
+        particles.push({
+          x,y, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp-2,
+          life: 0.7+Math.random()*0.8, max: 1.2, r: 2+Math.random()*4,
+          color: colors[i%colors.length], rot: Math.random()*6, spin:(Math.random()-0.5)*0.4
+        });
+      }
+    }
+    function rain(n=24){
+      for (let i=0;i<n;i++){
+        particles.push({
+          x: Math.random()*fx.width, y: -10, vx:(Math.random()-.5)*1.2, vy: 2+Math.random()*4,
+          life: 1.6+Math.random(), max: 2, r: 2+Math.random()*3,
+          color: ["#ffd24a","#c8ff3d","#6ee7ff","#fff"][i%4], rot:0, spin:0.1
+        });
+      }
+    }
+    function flash(){ flashEl.classList.remove("go"); void flashEl.offsetWidth; flashEl.classList.add("go"); }
+
+    function updateFX(){
+      const w = fx.width = window.innerWidth, h = fx.height = window.innerHeight;
+      fxc.clearRect(0,0,w,h);
+      particles = particles.filter(p => p.life > 0);
+      for (const p of particles){
+        p.life -= 0.016; p.x += p.vx; p.y += p.vy; p.vy += 0.12; p.rot += p.spin;
+        fxc.save();
+        fxc.globalAlpha = Math.max(0, p.life / p.max);
+        fxc.translate(p.x,p.y); fxc.rotate(p.rot);
+        fxc.fillStyle = p.color;
+        fxc.fillRect(-p.r, -p.r*0.5, p.r*2, p.r);
+        fxc.restore();
+      }
+      if (state==="final" && total >= PASS * Math.max(1, run.length-2) && Math.random()<0.18) rain(6);
+    }
+
+    function bind(id, fn){ const el = document.getElementById(id); if (el) el.onclick = fn; }
+
+    function renderCenter(){
+      finalEl.className = "";
+      finalEl.innerHTML = "";
+      if (state==="loading"){
+        centerEl.innerHTML = `<div class="badge">LOADING</div><div class="title-lg">載入姿勢模型中…</div><div class="sub">模型已經包喺本機，唔使再下載。</div>`;
+        return;
+      }
+      if (state==="idle"){
+        centerEl.innerHTML = `
+          <div class="badge">5 題挑戰</div>
+          <div class="title-lg">企入畫面，準備全開</div>
+          <div class="sub">五個動作限時擺到位，分數一路加。最多 500 分。</div>
+          <div class="actions"><button id="btnStart">開始挑戰</button></div>`;
+        bind("btnStart", startGame);
+        return;
+      }
+      if (state==="capture"){
+        const ready = landmarks && bodyPresent(landmarks);
+        const pct = Math.round(captureProgress * 100);
+        centerEl.innerHTML = `
+          <div class="badge">挑戰題 · 出題</div>
+          <div class="title-lg">擺好姿勢，鎖定做題目</div>
+          <div class="sub">只記關節位置，唔存影相。企定約 1 秒會自動鎖定。</div>
+          <div class="lockbar"><i style="width:${pct}%"></i></div>
+          <div class="actions">
+            <button id="btnLock" ${ready?"":"disabled"}>鎖定題目</button>
+            <button class="ghost" id="btnCancelCap">返回</button>
+          </div>`;
+        bind("btnLock", lockChallenge);
+        bind("btnCancelCap", resetIdle);
+        return;
+      }
+      if (state==="challengeLocked"){
+        centerEl.innerHTML = `<div class="badge">題目已鎖定</div><div class="plus">OK</div><div class="sub">主持請讓位，換下一位上來模仿</div>`;
+        return;
+      }
+      if (state==="challengeWait"){
+        centerEl.innerHTML = `
+          <div class="badge">挑戰題</div>
+          <div class="title-lg">跟住藍色骨架擺同一個姿勢</div>
+          <div class="sub">準備好就開始。限時 8 秒，紅點代表未到位。</div>
+          <div class="actions">
+            <button id="btnMimic">開始模仿</button>
+            <button class="ghost" id="btnNewCap">重新出題</button>
+          </div>`;
+        bind("btnMimic", () => startCountdown(true));
+        bind("btnNewCap", enterCapture);
+        return;
+      }
+      if (state==="countdown"){
+        centerEl.innerHTML = `<div class="badge">${roundLabel()}　${pose().name}</div><div class="countdown" id="cd">${countdownVal}</div><div class="sub">${pose().hint}</div>`;
+        return;
+      }
+      if (state==="scoring"){
+        centerEl.innerHTML = liveScore>=PASS
+          ? `<div class="pass">Nice!</div>`
+          : `<div class="badge">${roundLabel()}　${pose().name}　·　紅點＝未到位</div><div class="title-lg">${pose().hint}</div>`;
+        return;
+      }
+      if (state==="interlude"){
+        const got = history[idx];
+        const ok = got>=PASS;
+        const next = idx < run.length-1 ? "下一題：" + run[idx+1].name : "結算即將登場";
+        centerEl.innerHTML = `
+          <div class="badge">${ok ? "達標" : "本題分數"}</div>
+          <div class="plus">${ok?"+":""}${got}</div>
+          <div class="sub">${next}</div>`;
+        return;
+      }
+      centerEl.innerHTML = "";
+    }
+
+    function showFinal(){
+      state = "final";
+      hotJoints = [];
+      renderDots();
+      setLive(null);
+      timerEl.textContent = "";
+      showToast("");
+      centerEl.innerHTML = "";
+      subEl.textContent = isClassic() ? "完場結算" : "挑戰題結算";
+      const best = isClassic() ? saveBest(total) : todayBest();
+      const rank = rankOf(total);
+      const max = maxScore();
+      finalEl.className = "show";
+      finalEl.innerHTML = `
+        <h2>${isClassic() ? "完場" : "挑戰題"}</h2>
+        <div class="grand" id="grand">0</div>
+        <div class="rank">${rank}</div>
+        <div class="bars">${history.map((s,i)=>`
+          <div class="bar-row">
+            <span>${run[i].name}</span>
+            <div class="track"><div class="fill ${s>=PASS?"":"fail"}" data-w="${s}"></div></div>
+            <div class="pts">${s}</div>
+          </div>`).join("")}</div>
+        <div class="sub">總分 ${total} ／ ${max}${isClassic() ? "　·　今日最佳 "+best : ""}</div>
+        <div class="actions">${isClassic() ? `
+          <button id="btnAgain">再來一轉</button>
+          <button id="btnChallenge">挑戰題</button>
+          <button class="ghost" id="btnNext">下一位</button>` : `
+          <button id="btnRetryCh">再試呢題</button>
+          <button id="btnNewCap">出新題</button>
+          <button class="ghost" id="btnBack">返回五題</button>`}
+        </div>`;
+      requestAnimationFrame(() => {
+        finalEl.querySelectorAll(".fill").forEach(el => { el.style.width = el.dataset.w + "%"; });
+      });
+      countUp(document.getElementById("grand"), total, 900);
+      burst(window.innerWidth/2, window.innerHeight*0.28, 120, true);
+      rain(40);
+      flash();
+      sfxFanfare();
+      bind("btnAgain", startGame);
+      bind("btnChallenge", enterCapture);
+      bind("btnNext", resetIdle);
+      bind("btnRetryCh", () => { idx=0; total=0; history=[]; setTotal(0); startCountdown(true); });
+      bind("btnNewCap", enterCapture);
+      bind("btnBack", resetIdle);
+    }
+
+    function countUp(el, target, ms){
+      const t0 = performance.now();
+      const tick = (t) => {
+        const k = Math.min(1, (t-t0)/ms);
+        const e = 1 - Math.pow(1-k, 3);
+        el.textContent = String(Math.round(target * e));
+        if (k<1) requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    }
+
+    function resetIdle(){
+      state = "idle"; run = POSES; challengeTarget = null; GHOSTS.challenge = null;
+      idx = 0; total = 0; history = []; poseBest = 0; liveScore = 0; hotJoints = [];
+      capturePrev = null; captureStableSince = 0; captureProgress = 0;
+      setLive(null); setTotal(0); timerEl.textContent = "";
+      subEl.textContent = "五題挑戰 · 累積計分";
+      finalEl.className = ""; finalEl.innerHTML = "";
+      renderDots(); renderCenter();
+    }
+
+    function startGame(){
+      if (audio.ctx && audio.ctx.state === "suspended") audio.ctx.resume();
+      run = POSES; challengeTarget = null; GHOSTS.challenge = null;
+      idx = 0; total = 0; history = []; poseBest = 0; hotJoints = [];
+      setTotal(0); setLive(0);
+      subEl.textContent = `第 1 ／ ${run.length} 題 · ${POSES[0].name}`;
+      finalEl.className = ""; finalEl.innerHTML = "";
+      startCountdown(true);
+    }
+
+    function enterCapture(){
+      if (audio.ctx && audio.ctx.state === "suspended") audio.ctx.resume();
+      state = "capture";
+      challengeTarget = null; GHOSTS.challenge = null;
+      run = [{ id:"challenge", name:"挑戰題", hint:"跟住藍色骨架，擺同一個姿勢", score:()=>({score:0,reason:"",hot:[]}), scoreSec:8 }];
+      idx = 0; total = 0; history = []; poseBest = 0; liveScore = 0; hotJoints = [];
+      capturePrev = null; captureStableSince = 0; captureProgress = 0;
+      setLive(null); setTotal(0); timerEl.textContent = "";
+      showToast("");
+      subEl.textContent = "挑戰題 · 主持出題";
+      finalEl.className = ""; finalEl.innerHTML = "";
+      renderDots(); renderCenter();
+    }
+
+    function lockChallenge(){
+      if (!landmarks || !bodyPresent(landmarks)) return;
+      challengeTarget = snapshotPose(landmarks);
+      if (!challengeTarget[11] || !challengeTarget[12] || !challengeTarget[23] || !challengeTarget[24]) {
+        showToast("偵測唔穩，再企定啲再鎖定");
+        return;
+      }
+      GHOSTS.challenge = challengeTarget;
+      run = [{
+        id:"challenge",
+        name:"挑戰題",
+        hint:"跟住藍色骨架，擺同一個姿勢",
+        score:(lm) => scoreAgainst(lm, challengeTarget),
+        scoreSec:8
+      }];
+      state = "challengeLocked";
+      stateUntil = now() + 1.3;
+      captureProgress = 1;
+      flash(); sfxPass();
+      renderDots(); renderCenter();
+    }
+
+    function startCountdown(first){
+      state = "countdown";
+      countdownVal = first ? 3 : 2;
+      stateUntil = now() + 1;
+      liveScore = 0; poseBest = 0; holdStart = 0; hotJoints = [];
+      setLive(0);
+      timerEl.textContent = "";
+      subEl.textContent = isClassic() ? `第 ${idx+1} ／ ${run.length} 題 · ${pose().name}` : "挑戰題 · 跟住做";
+      renderDots(); renderCenter(); sfxTick();
+    }
+
+    function startScoring(){
+      state = "scoring";
+      stateUntil = now() + (pose().scoreSec || SCORE_SEC);
+      holdStart = 0; poseBest = 0; hotJoints = [];
+      sfxGo(); flash();
+      renderCenter();
+    }
+
+    function endPose(){
+      const got = poseBest;
+      history[idx] = got;
+      total += got;
+      setTotal(total); setLive(got);
+      hotJoints = [];
+      if (got >= PASS) { burst(window.innerWidth/2, window.innerHeight*0.4, 80); sfxPass(); flash(); }
+      state = "interlude";
+      stateUntil = now() + INTER_SEC;
+      timerEl.textContent = "";
+      renderDots(); renderCenter();
+    }
+
+    function updateLogic(t){
+      const present = landmarks && bodyPresent(landmarks);
+      presentSince = present ? (presentSince || t) : 0;
+
+      if (state==="idle"){
+        setLive(null); timerEl.textContent="";
+        if (present && t-presentSince >= DETECT_SEC) startGame();
+        showToast(landmarks && !present ? "請全身入鏡，面向鏡頭" : "");
+        return;
+      }
+      if (state==="capture"){
+        setLive(null); timerEl.textContent="";
+        if (!present){
+          capturePrev = null; captureStableSince = 0; captureProgress = 0;
+          showToast(landmarks ? "請全身入鏡，面向鏡頭" : "");
+        } else {
+          showToast("");
+          const snap = snapshotPose(landmarks);
+          const still = poseShift(snap, capturePrev) < 0.035;
+          capturePrev = snap;
+          if (still) {
+            if (!captureStableSince) captureStableSince = t;
+            captureProgress = Math.min(1, (t - captureStableSince) / CAPTURE_HOLD);
+            if (t - captureStableSince >= CAPTURE_HOLD) { lockChallenge(); return; }
+          } else {
+            captureStableSince = 0;
+            captureProgress = 0;
+          }
+        }
+        const bar = centerEl.querySelector(".lockbar > i");
+        const btn = document.getElementById("btnLock");
+        if (!bar || !document.getElementById("btnCancelCap")) renderCenter();
+        else {
+          bar.style.width = Math.round(captureProgress * 100) + "%";
+          if (btn) btn.disabled = !present;
+        }
+        return;
+      }
+      if (state==="challengeLocked"){
+        showToast("");
+        if (t >= stateUntil){
+          state = "challengeWait";
+          renderCenter();
+        }
+        return;
+      }
+      if (state==="challengeWait"){
+        setLive(null); timerEl.textContent="";
+        showToast("");
+        return;
+      }
+      if (state==="countdown"){
+        showToast("");
+        if (t >= stateUntil){
+          countdownVal -= 1;
+          if (countdownVal <= 0) startScoring();
+          else { stateUntil = t+1; renderCenter(); sfxTick(); }
+        }
+        return;
+      }
+      if (state==="scoring"){
+        const left = Math.max(0, stateUntil - t);
+        timerEl.textContent = left.toFixed(1)+"s";
+        timerEl.className = "timer" + (left<=2 ? " urgent" : "");
+        const r = landmarks ? pose().score(landmarks) : {score:0, reason:"搵唔到人", hot:[]};
+        const wasPass = poseBest >= PASS && holdStart;
+        liveScore = r.score;
+        hotJoints = (liveScore>=PASS) ? [] : (r.hot || []);
+        if (liveScore > poseBest) poseBest = liveScore;
+        setLive(liveScore);
+        showToast(r.reason);
+        if ((liveScore>=PASS) !== !!wasPass) renderCenter();
+        if (liveScore >= PASS){
+          if (!holdStart) holdStart = t;
+          if (t-holdStart >= HOLD_SEC){ poseBest = Math.max(poseBest, liveScore); endPose(); return; }
+        } else holdStart = 0;
+        if (left<=0) endPose();
+        return;
+      }
+      if (state==="interlude"){
+        showToast("");
+        if (t >= stateUntil){
+          if (idx >= run.length-1) showFinal();
+          else { idx += 1; startCountdown(false); }
+        }
+      }
+    }
+
+    function resize(){
+      const w = video.videoWidth || 1280, h = video.videoHeight || 720;
+      if (canvas.width!==w || canvas.height!==h){ canvas.width=w; canvas.height=h; }
+    }
+
+    function drawGhost(lm, tmpl, w, h){
+      const g = alignedGhost(lm, tmpl);
+      ctx.lineWidth=6; ctx.strokeStyle="rgba(110,231,255,.88)"; ctx.setLineDash([12,10]);
+      for (const [a,b] of EDGES){
+        if (!g[a]||!g[b]) continue;
+        ctx.beginPath(); ctx.moveTo(g[a].x*w,g[a].y*h); ctx.lineTo(g[b].x*w,g[b].y*h); ctx.stroke();
+      }
+      ctx.setLineDash([]);
+      ctx.fillStyle="rgba(110,231,255,.9)";
+      for (const k of Object.keys(g)){ ctx.beginPath(); ctx.arc(g[k].x*w,g[k].y*h,7,0,Math.PI*2); ctx.fill(); }
+    }
+
+    function drawHotDots(w, h){
+      if (state!=="scoring" || !hotJoints.length || !landmarks) return;
+      const pulse = 1 + 0.22 * Math.sin(now() * 9);
+      for (const i of hotJoints){
+        const pt = landmarks[i];
+        if (!pt || (pt.visibility !== undefined && pt.visibility < 0.4)) continue;
+        const x = pt.x*w, y = pt.y*h, r = 12 * pulse;
+        ctx.beginPath();
+        ctx.arc(x, y, r+8, 0, Math.PI*2);
+        ctx.strokeStyle = "rgba(255,90,106,.95)";
+        ctx.lineWidth = 4;
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI*2);
+        ctx.fillStyle = "#ff5a6a";
+        ctx.shadowColor = "rgba(255,90,106,.9)";
+        ctx.shadowBlur = 16;
+        ctx.fill();
+        ctx.shadowBlur = 0;
+      }
+    }
+
+    function draw(){
+      resize();
+      const w=canvas.width, h=canvas.height;
+      ctx.save();
+      ctx.translate(w,0); ctx.scale(-1,1);
+      ctx.fillStyle="#050814"; ctx.fillRect(0,0,w,h);
+      if (video.readyState>=2) ctx.drawImage(video,0,0,w,h);
+
+      ctx.strokeStyle="rgba(110,231,255,.32)";
+      ctx.setLineDash([14,10]); ctx.lineWidth=4;
+      ctx.strokeRect(w*0.2, h*0.07, w*0.6, h*0.88);
+      ctx.setLineDash([]);
+
+      if (landmarks && drawing && state!=="final"){
+        const canGhost = bodyPresent(landmarks) && pose() && GHOSTS[pose().id] &&
+          (state==="countdown"||state==="scoring"||state==="idle"||state==="interlude"||state==="challengeWait");
+        if (canGhost) drawGhost(landmarks, GHOSTS[pose().id], w, h);
+        const lm = landmarks.map(pt => ({...pt, x:pt.x*w, y:pt.y*h}));
+        const color = (liveScore>=PASS && state==="scoring") ? "#c8ff3d" : "#e7ff8a";
+        drawing.drawConnectors(lm, PoseLandmarker.POSE_CONNECTIONS, { color, lineWidth:5 });
+        drawing.drawLandmarks(lm, { color:"#fff", lineWidth:1, radius:4 });
+        drawHotDots(w, h);
+      }
+      ctx.restore();
+    }
+
+    function loop(){
+      if (landmarker && video.currentTime !== lastVideoTime && video.readyState>=2){
+        lastVideoTime = video.currentTime;
+        const res = landmarker.detectForVideo(video, performance.now());
+        landmarks = (res.landmarks && res.landmarks[0]) ? res.landmarks[0] : null;
+      }
+      if (state!=="final") updateLogic(now());
+      draw(); updateFX();
+      requestAnimationFrame(loop);
+    }
+
+    function key(e){
+      if (e.key==="r"||e.key==="R"){
+        if (state==="capture" || state==="challengeLocked" || state==="challengeWait") return;
+        if (!isClassic() && challengeTarget && (state==="final"||state==="countdown"||state==="scoring"||state==="interlude")){
+          idx=0; total=0; history=[]; setTotal(0); startCountdown(true); return;
+        }
+        startGame();
+      }
+      if (e.key===" " ){
+        if (state==="idle"|| (state==="final" && isClassic())){ e.preventDefault(); startGame(); }
+        else if (state==="capture"){ e.preventDefault(); lockChallenge(); }
+        else if (state==="challengeWait" || (state==="final" && !isClassic())){ e.preventDefault(); idx=0; total=0; history=[]; setTotal(0); startCountdown(true); }
+      }
+    }
+
+    async function init(){
+      bestLabel.textContent = todayBest() || "—";
+      renderDots(); renderCenter();
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video:{ facingMode:"user", width:{ideal:1280}, height:{ideal:720} }, audio:false
+        });
+        video.srcObject = stream; await video.play();
+      } catch(err){
+        centerEl.innerHTML = `<div class="badge">鏡頭</div><div class="title-lg">開唔到鏡頭</div><div class="sub">請用 Chrome／Edge 允許鏡頭。若直接開檔失敗，用本機伺服器（見 README）。</div>`;
+        document.getElementById("meta").textContent = String(err.message||err);
+        return;
+      }
+      try {
+        const files = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/wasm");
+        // Bundled MediaPipe Pose Landmarker Lite (float16), so the page does not fetch it from Google on each visit.
+        // Source: https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task
+        const modelPath = "models/pose_landmarker_lite.task";
+        const opts = (delegate)=>({
+          baseOptions:{ modelAssetPath: modelPath, delegate },
+          runningMode:"VIDEO", numPoses:1,
+          minPoseDetectionConfidence:.5, minPosePresenceConfidence:.5, minTrackingConfidence:.5
+        });
+        try { landmarker = await PoseLandmarker.createFromOptions(files, opts("GPU")); }
+        catch { landmarker = await PoseLandmarker.createFromOptions(files, opts("CPU")); }
+        drawing = new DrawingUtils(ctx);
+      } catch(err){
+        centerEl.innerHTML = `<div class="badge">模型</div><div class="title-lg">載入失敗</div><div class="sub">本機模型係 models/pose_landmarker_lite.task。MediaPipe 程式仍然要由 CDN 載入，請檢查網絡後重新整理。</div>`;
+        document.getElementById("meta").textContent = String(err.message||err);
+        return;
+      }
+      state="idle"; renderCenter();
+      window.addEventListener("keydown", key);
+      loop();
+    }
+    init();
+  </script>
+</body>
+</html>
